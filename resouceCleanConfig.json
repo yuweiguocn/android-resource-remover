@@ -1,6 +1,6 @@
 {
 	"projects": [
-		"/58ClientHybridLib/",
+		"/app/",
 		"/push/"
 	],
 	"pathIncludes": [
