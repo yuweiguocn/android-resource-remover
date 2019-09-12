@@ -7,13 +7,14 @@
 通常我们可以使用lint检查工程内无用资源，但执行lint命令发现只检查了壳工程的无用资源，并没有检查子Module的无用资源。
 
 针对这个问题可以使用下面的配置，对应用的依赖也执行检查：
-
+```
 lintOptions {
     checkReleaseBuilds false
     abortOnError false
     checkDependencies true //对依赖的资源也执行检查，注意也会对引用aar检查，如果是子module打开源码依赖即可
     check "UnusedResources" //只检查无用资源，提升执行速度
 }
+```
 然后执行lint命令进行检查无用资源：
 ```
 ./gradlew lint
