@@ -1,81 +1,93 @@
-[![Build Status](https://travis-ci.org/KeepSafe/android-resource-remover.svg?branch=master)](https://travis-ci.org/KeepSafe/android-resource-remover)
 
-![resource-remover](https://keepsafe.github.io/i/proj/opensource_resource-remover.png)
-android-resource-remover
-========================
-
-android-resource-remover is utility that removes unused resources reported by [Android Lint](http://developer.android.com/tools/help/lint.html) from your project. The goal is to reduce your APK size and keep the app clean from unused stuff.
+# android-resource-remover
+一个根据lint结果自动化清理无用资源的python脚本工具。
 
 
-## Getting started
-Requirements:
+## 使用lint检查无用资源
+通常我们可以使用lint检查工程内无用资源，但执行lint命令发现只检查了壳工程的无用资源，并没有检查子Module的无用资源。
 
-* Python >= 2.7.*
-* ADT >= 16
+针对这个问题可以使用下面的配置，对应用的依赖也执行检查：
 
-To install run:
-
-    pip install android-resource-remover
-
-## Usage - general
-Open the directory where your app is located and run
-
+lintOptions {
+    checkReleaseBuilds false
+    abortOnError false
+    checkDependencies true //对依赖的资源也执行检查，注意也会对引用aar检查，如果是子module打开源码依赖即可
+    check "UnusedResources" //只检查无用资源，提升执行速度
+}
+然后执行lint命令进行检查无用资源：
 ```
-android-resource-remover
+./gradlew lint
 ```
 
-Android resources have dependencies to each other. This means that after running resource-remover the first time, it will clean up unused resources file that hold a reference to other resources. You can run this resource remover multiple times until there is no more unused resources to be removed. We've been running it up to 4 times in a row.
+然后我们可以在build下的reports目录下找到lint的结果。
 
 
-### Use with gradle
-`android-resource-remover` is build on top of android lint. If you have a gradle project you have to run lint within your gradle build scripts and then use the `lint-result.xml` as the input file for `android-resource-remover`
+## 配置
 
-e.g.
+首先将本工程clone到你的项目工程的根目录中，然后根据你项目使用反射获取的资源在resouceCleanConfig.json文件中进行配置：
+```
+{
+	"projects": [
+		"/app/",
+		"/push/"
+	],
+	"pathIncludes": [
+		".jpg",
+		".png",
+		".xml"
+	],
+	"pathExcludes": [
+		"------common-config-start--------",
+		"/layout/"
+	]
+}
 
-    ./gradlew clean build :lint && android-resource-remover --xml build/outputs/lint-results.xml
+```
+- projects：表示要清理无用资源的路径需要包含的子Module工程名称，因为依赖检查也会对引用的所有aar进行检查，所以我们需要指定打开源码的子Module的名称。
+- pathIncludes：表示要清理的无用资源的路径需要匹配的规则。
+- pathExcludes：表示要清理的无用资源的路径不能包含的字符串，也就是白名单。
+
+以上三个条件为并列条件，只有同时满足才会被清理。上述json配置的文件表示清理app和push Module下文件后缀为.jpg或.png或xml的资源，但不删除布局文件。
+
+## 白名单
+
+目前发现工程使用代码获取资源的方法有以下两种，代码中使用下列方法获取的图片名称需要添加配置文件白名单中。
+```
+//第一种
+item.resId = mContext.getResources().getIdentifier(name, "drawable", mContext.getPackageName());
+//第二种
+public static Integer getResourceDrawableId(String resource) {
+    if(TextUtils.isEmpty(resource)){
+        return -1;
+    }
+    try {
+        String name = resource.trim();
+        Field field = R.drawable.class.getField(name);
+        return field.getInt(null);
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+    return -1;
+}
+```
+
+建议对新增的资源在使用代码获取时对名称添加统一前缀`reflect_`。
+
+## 自动化
+
+> 此步骤请谨慎操作，删除的资源无法恢复，使用前请添加版本控制。
+
+配置好后执行如下命令自动清理无用资源：
+```
+python android_clean_app.py --xml ../app/build/reports/lint-results.xml
+```
+参数`--xml`指定为你的lint结果文件的路径。
 
 
-### Options
+## 解决打包失败问题
+lint的检测结果包含无用代码对资源的引用，如果只是将无用资源删除后可能会引起打包失败。
+针对这个问题我们会自动添加一个unused_ids.xml文件保存删除的资源id，这可以保证不会由于删除无用资源引起的打包失败。
 
-#### --help
-Prints help message.
-
-#### --lint
-Full path to the lint tool like: `d:\Dev\Android SDK\tools\lint`
-
-This will be executed as the lint command. If not provided it assumes the lint command in available and runs: `lint`
-
-#### --app
-Full path to the android app like: `d:\Dev\My_Android_App`
-
-If not provided it assumes the current directory is the app's root directory.
-
-#### --xml
-
-Use existing lint result. If provided lint won't be run.
-
-#### --ignore-layouts
-
-Ignore layout directory
-
-## Expected behavior
-### Resource ID in code not found
-
-If you have references to elements in an old layout that you're not using anymore, you will get a compile error that the ID (`R.id.<something>`) can not be found. The reason is that the resource file that contained `R.id.<something>` has been removed as it was not used any more. Time to clean up your code.
-
-## FAQ
-
-**Q:  installing dependency lxml failed** with `clang: error: unknown argument: '-mno-fused-madd' [-Wunused-command-line-argument-hard-error-in-future]`  
-*A: [http://stackoverflow.com/a/22322645](http://stackoverflow.com/a/22322645)*
-
-**Q:  installing dependency lxml failed** with `fatal error: 'libxml/xmlversion.h' file not found`  
-*A: There are several ways to fix this listed on stackoverflow  [http://stackoverflow.com/questions/19548011/cannot-install-lxml-on-mac-os-x-10-9](http://stackoverflow.com/questions/19548011/cannot-install-lxml-on-mac-os-x-10-9)*
-
-## Issues and PR
-
-When opening an issue please include as much info as possible. pip.log, python varsion/info, os version/info might all be help us understanding what's the problem.
-
-In PR please keep the formatting.
 
 ## Licence
 Apache version 2.0

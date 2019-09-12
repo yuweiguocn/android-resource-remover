@@ -1,0 +1,15 @@
+{
+	"projects": [
+		"/app/",
+		"/push/"
+	],
+	"pathIncludes": [
+		".jpg",
+		".png",
+		".xml"
+	],
+	"pathExcludes": [
+		"------common-config-start--------",
+		"/layout/"
+	]
+}

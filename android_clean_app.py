@@ -7,18 +7,24 @@
 
     :copyright: (c) 2014 by KeepSafe.
     :license: Apache, see LICENSE for more details.
+    Usage: python android_clean_app.py --xml ./58WuxianClient/build/reports/lint-results.xml
 """
 
 import argparse
 import os
 import re
+import json
 import subprocess
 import distutils.spawn
 from lxml import etree
 
-ANDROID_MANIFEST_PATH = 'src/main/AndroidManifest.xml'
-ANDROID_MANIFEST_OLD_PATH = 'AndroidManifest.xml'
+# ANDROID_MANIFEST_PATH = 'AndroidManifest.xml'
+# ANDROID_MANIFEST_OLD_PATH = 'AndroidManifest.xml'
+RESOUCE_CLEAN_CONFIG_PATH = './resouceCleanConfig.json'
+UNUSED_IDS_PATH = '.{0}res/values/unused_ids.xml'
+IDS_PATH = '.{0}res/values/ids.xml'
 
+counter = 0
 
 class Issue:
 
@@ -105,12 +111,12 @@ def run_lint_command():
     return lint_result, app_dir, ignore_layouts
 
 
-def get_manifest_path(app_dir):
-    manifest_path = os.path.abspath(os.path.join(app_dir, ANDROID_MANIFEST_PATH))
-    if os.path.isfile(manifest_path):
-        return manifest_path
-    else:
-        return os.path.abspath(os.path.join(app_dir, ANDROID_MANIFEST_OLD_PATH))
+# def get_manifest_path(app_dir):
+#     manifest_path = os.path.abspath(os.path.join(app_dir, ANDROID_MANIFEST_PATH))
+#     if os.path.isfile(manifest_path):
+#         return manifest_path
+#     else:
+#         return os.path.abspath(os.path.join(app_dir, ANDROID_MANIFEST_OLD_PATH))
 
 
 def get_manifest_string_refs(manifest_path):
@@ -128,7 +134,8 @@ def _get_issues_from_location(issue_class, locations, message):
         # if the location contains line and/or column attribute not the entire resource is unused.
         # that's a guess ;)
         # TODO stop guessing
-        remove_entire_file = (location.get('line') or location.get('column')) is None
+        # or (location.get('line') == '2' and location.get('column')=='1')
+        remove_entire_file = (location.get('line') or location.get('column')) is None or (location.get('line') == '2' and location.get('column')=='1')
         issue = issue_class(filepath, remove_entire_file)
         issue.add_element(message)
         issues.append(issue)
@@ -139,36 +146,110 @@ def parse_lint_result(lint_result_path, manifest_path):
     """
     Parse lint-result.xml and create Issue for every problem found except unused strings referenced in AndroidManifest
     """
-    unused_string_pattern = re.compile('The resource `R\.string\.([^`]+)` appears to be unused')
-    mainfest_string_refs = get_manifest_string_refs(manifest_path)
+    # unused_string_pattern = re.compile('The resource `R\.string\.([^`]+)` appears to be unused')
+    # mainfest_string_refs = get_manifest_string_refs(manifest_path)
     root = etree.parse(lint_result_path).getroot()
     issues = []
 
     for issue_xml in root.findall('.//issue[@id="UnusedResources"]'):
         message = issue_xml.get('message')
-        unused_string = re.match(unused_string_pattern, issue_xml.get('message'))
-        has_string_in_manifest = unused_string and unused_string.group(1) in mainfest_string_refs
-        if not has_string_in_manifest:
-            issues.extend(_get_issues_from_location(UnusedResourceIssue,
+        # unused_string = re.match(unused_string_pattern, issue_xml.get('message'))
+        # has_string_in_manifest = unused_string and unused_string.group(1) in mainfest_string_refs
+        # if not has_string_in_manifest:
+        issues.extend(_get_issues_from_location(UnusedResourceIssue,
                                                     issue_xml.findall('location'),
                                                     message))
 
-    for issue_xml in root.findall('.//issue[@id="ExtraTranslation"]'):
-        message = issue_xml.get('message')
-        if re.findall(ExtraTranslationIssue.pattern, message):
-            issues.extend(_get_issues_from_location(ExtraTranslationIssue,
-                                                    issue_xml.findall('location'),
-                                                    message))
+    # for issue_xml in root.findall('.//issue[@id="ExtraTranslation"]'):
+    #     message = issue_xml.get('message')
+    #     if re.findall(ExtraTranslationIssue.pattern, message):
+    #         issues.extend(_get_issues_from_location(ExtraTranslationIssue,
+    #                                                 issue_xml.findall('location'),
+    #                                                 message))
 
     return issues
+
+
+def get_projects(filepath):
+    with open(RESOUCE_CLEAN_CONFIG_PATH, 'r') as f:
+        text = json.loads(f.read())
+        for include in text['projects']:
+            if include in filepath:
+                return include
+        return ""
+
+def get_include(filepath):
+    with open(RESOUCE_CLEAN_CONFIG_PATH, 'r') as f:
+        text = json.loads(f.read())
+        for include in text['pathIncludes']:
+            if include in filepath:
+                return True
+        return False
+
+def get_exclude(filepath):
+    with open(RESOUCE_CLEAN_CONFIG_PATH, 'r') as f:
+        text = json.loads(f.read())
+        for exclude in text['pathExcludes']:
+            if exclude in filepath:
+                return True
+        return False
+
+def add_unused_ids(filepath):
+    type = 'id'
+    if('/drawable' in filepath):
+        type = 'drawable'
+    elif('/color' in filepath):
+        type = 'color'
+    elif('/anim' in filepath):
+        type = 'anim'
+    elif('/layout' in filepath):
+        type = 'layout'
+
+    if(not os.path.exists(UNUSED_IDS_PATH.format(get_projects(filepath)))):
+        fo = open(UNUSED_IDS_PATH.format(get_projects(filepath)),"w")
+        fo.write('<?xml version="1.0" encoding="utf-8"?>\n')
+        fo.write('<resources>\n')
+        fo.write('</resources>')
+        fo.close()
+
+    filename = os.path.basename(filepath).split(".")[0]
+    if(has_contain_ids(filepath,filename,type)):
+        return
+
+    parser = etree.XMLParser(remove_blank_text=True, remove_comments=False,
+                                     remove_pis=False, strip_cdata=False, resolve_entities=False)
+    tree = etree.parse(UNUSED_IDS_PATH.format(get_projects(filepath)), parser)
+    root = tree.getroot()
+    root.append(etree.Element("item",name=filename,type=type))
+    with open(UNUSED_IDS_PATH.format(get_projects(filepath)), 'wb') as resource:
+        tree.write(resource, encoding='utf-8', xml_declaration=True,pretty_print=True)
+
+def has_contain_ids(filepath,filename,type):
+    root = etree.parse(UNUSED_IDS_PATH.format(get_projects(filepath))).getroot()
+    for issue_xml in root.findall('.//item[@name="{0}"]'.format(filename)):
+        if(issue_xml.get("type") == type):
+            return True
+
+
+    if(os.path.exists(IDS_PATH.format(get_projects(filepath)))):
+        root2 = etree.parse(IDS_PATH.format(get_projects(filepath))).getroot()
+        for issue_xml in root2.findall('.//item[@name="{0}"]'.format(filename)):
+            if(issue_xml.get("type") == type):
+                return True
+
+    return False
+
 
 
 def remove_resource_file(issue, filepath, ignore_layouts):
     """
     Delete a file from the filesystem
     """
-    if os.path.exists(filepath) and (ignore_layouts is False or issue.elements[0][0] != 'layout'):
+    if os.path.exists(filepath) and get_projects(filepath) != "" and get_include(filepath) and  not get_exclude(filepath) and (ignore_layouts is False or issue.elements[0][0] != 'layout'):
         print('removing resource: {0}'.format(filepath))
+        add_unused_ids(filepath)
+        global counter
+        counter+=1
         os.remove(os.path.abspath(filepath))
 
 
@@ -195,18 +276,21 @@ def remove_unused_resources(issues, app_dir, ignore_layouts):
     """
     for issue in issues:
         filepath = os.path.join(app_dir, issue.filepath)
+        #print(filepath)
         if issue.remove_file:
             remove_resource_file(issue, filepath, ignore_layouts)
-        else:
-            remove_resource_value(issue, filepath)
+        # else:
+        #     remove_resource_value(issue, filepath)
+
 
 
 def main():
     lint_result_path, app_dir, ignore_layouts = run_lint_command()
     if os.path.exists(lint_result_path):
-        manifest_path = get_manifest_path(app_dir)
-        issues = parse_lint_result(lint_result_path, manifest_path)
+        # manifest_path = get_manifest_path(app_dir)
+        issues = parse_lint_result(lint_result_path, 'manifest_path')
         remove_unused_resources(issues, app_dir, ignore_layouts)
+        print('Total Unused Resources = '+str(counter))
     else:
         print('the file with lint results could not be found: %s' % lint_result_path)
 
