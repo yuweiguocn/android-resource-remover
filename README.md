@@ -89,6 +89,10 @@ python android_clean_app.py --xml ../app/build/reports/lint-results.xml
 lint的检测结果包含无用代码对资源的引用，如果只是将无用资源删除后可能会引起打包失败。
 针对这个问题我们会自动添加一个unused_ids.xml文件保存删除的资源id，这可以保证不会由于删除无用资源引起的打包失败。
 
+## 运行结果
+
+![](./result.gif)
+
 
 ## Licence
 Apache version 2.0
