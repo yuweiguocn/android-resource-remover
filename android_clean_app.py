@@ -21,8 +21,8 @@ from lxml import etree
 # ANDROID_MANIFEST_PATH = 'AndroidManifest.xml'
 # ANDROID_MANIFEST_OLD_PATH = 'AndroidManifest.xml'
 RESOUCE_CLEAN_CONFIG_PATH = './resouceCleanConfig.json'
-UNUSED_IDS_PATH = '..{0}res/values/unused_ids.xml'
-IDS_PATH = '..{0}res/values/ids.xml'
+UNUSED_IDS_PATH = '..{0}src/main/res/values/unused_ids.xml'
+IDS_PATH = '..{0}src/main/res/values/ids.xml'
 
 counter = 0
 
