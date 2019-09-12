@@ -7,7 +7,7 @@
 
     :copyright: (c) 2014 by KeepSafe.
     :license: Apache, see LICENSE for more details.
-    Usage: python android_clean_app.py --xml ./58WuxianClient/build/reports/lint-results.xml
+    Usage: python android_clean_app.py --xml ../app/build/reports/lint-results.xml
 """
 
 import argparse
@@ -21,8 +21,8 @@ from lxml import etree
 # ANDROID_MANIFEST_PATH = 'AndroidManifest.xml'
 # ANDROID_MANIFEST_OLD_PATH = 'AndroidManifest.xml'
 RESOUCE_CLEAN_CONFIG_PATH = './resouceCleanConfig.json'
-UNUSED_IDS_PATH = '.{0}res/values/unused_ids.xml'
-IDS_PATH = '.{0}res/values/ids.xml'
+UNUSED_IDS_PATH = '..{0}res/values/unused_ids.xml'
+IDS_PATH = '..{0}res/values/ids.xml'
 
 counter = 0
 

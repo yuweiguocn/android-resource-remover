@@ -1,6 +1,6 @@
 {
 	"projects": [
-		"/app/",
+		"/58ClientHybridLib/",
 		"/push/"
 	],
 	"pathIncludes": [
@@ -9,7 +9,6 @@
 		".xml"
 	],
 	"pathExcludes": [
-		"------common-config-start--------",
-		"/layout/"
+		"------common-config-start--------"
 	]
 }
